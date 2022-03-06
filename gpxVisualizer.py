@@ -9,7 +9,7 @@ Tool to visualize multiple gpx files on a single map.
 
 """
 
-__author__ = "Dominic Schwarz <dominic.schwarz@dnic42.de>"
+__author__ = "Dnic94 <github@dnic42.de>"
 __created__ = "06.03.2022"
 
 ###############################################################################
@@ -158,7 +158,7 @@ def visualizeGPX(gpx_files: list, zoom) -> folium.Map:
 
     # Calculate center of map
     all_points = list(iterFlatten(list(points_dict.values())))
-    logger.info(f"Count of all collected Points: {len(all_points)}")
+    logger.info(f"Count of all collected points: {len(all_points)}")
     latitude = sum(p[0] for p in all_points) / len(all_points)
     logger.info(f"Calculated latitude: {latitude}")
     longitude = sum(p[1] for p in all_points) / len(all_points)
