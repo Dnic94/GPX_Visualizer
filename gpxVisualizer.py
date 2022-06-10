@@ -3,20 +3,21 @@
 
 ###############################################################################
 __program__ = "GPX_Visualizer"
-__version__ = "1.0"
+__version__ = "1.1"
 __description__ = f"""{__program__} {__version__}:
 Tool to visualize multiple gpx files on a single map.
 
 """
 
 __author__ = "Dnic94 <github@dnic42.de>"
-__created__ = "06.03.2022"
+__created__ = "10.06.2022"
 
 ###############################################################################
 
 import argparse
 import logging.handlers
 import os
+from typing import Any, List
 
 import colorutils
 import folium
@@ -106,20 +107,20 @@ def setLogLevel(args):
 
 
 def main(args):
-    outfile = args.out_file
-    gpx_dir = args.gpx_dir
+    outFile = args.out_file
+    gpxDir = args.gpx_dir
     zoom = args.zoom
-    gpx_files = []
+    gpxFiles = []
 
-    logger.info(f"GPX directory: {gpx_dir}")
-    for file in os.listdir(gpx_dir):
+    logger.info(f"GPX directory: {gpxDir}")
+    for file in os.listdir(gpxDir):
         if file.endswith(".gpx"):
-            gpx_files.append(f"{gpx_dir}/{file}")
+            gpxFiles.append(f"{gpxDir}/{file}")
             logger.info(f"Found file: {file}")
 
-    gpx_map = visualizeGPX(gpx_files, zoom)
-    logger.info(f"Save map as {outfile}")
-    gpx_map.save(outfile)
+    gpxMap = visualizeGPX(gpxFiles, zoom)
+    logger.info(f"Save map as {outFile}")
+    gpxMap.save(outFile)
     exit(0)
 
 
@@ -134,49 +135,49 @@ def iterFlatten(root: list):
         yield root
 
 
-def visualizeGPX(gpx_files: list, zoom) -> folium.Map:
+def visualizeGPX(gpxFiles: list, zoom) -> folium.Map:
     """Function to draw tracks from gpx files on a folium map.
 
     Takes a list of gpx file paths and zoom factor for the map.
     Returns a folium map with all tracks.
     """
-    points_dict = {}
+    pointsDict: dict[int, List] =  {}
 
     # Collect points of all tracks in all files
-    for number, gpx_file in enumerate(gpx_files):
-        logger.info(f"Visualize {gpx_file}.")
-        points_dict[number] = []
-        gpx_file_handle = open(gpx_file, "r")
-        gpx = gpxpy.parse(gpx_file_handle)
+    for number, gpxFile in enumerate(gpxFiles):
+        logger.info(f"Visualize {gpxFile}.")
+        pointsDict[number] = []
+        gpxFileHandle = open(gpxFile, "r")
+        gpx = gpxpy.parse(gpxFileHandle)
 
         for track in gpx.tracks:
             for segment in track.segments:
                 for point in segment.points:
-                    points_dict[number].append(tuple([point.latitude, point.longitude]))
+                    pointsDict[number].append(tuple([point.latitude, point.longitude]))
 
-        logger.debug(f"Found {len(points_dict[number])} points in {gpx_file}.")
+        logger.debug(f"Found {len(pointsDict[number])} points in {gpxFile}.")
 
     # Calculate center of map
-    all_points = list(iterFlatten(list(points_dict.values())))
-    logger.info(f"Count of all collected points: {len(all_points)}")
-    latitude = sum(p[0] for p in all_points) / len(all_points)
+    allPoints = list(iterFlatten(list(pointsDict.values())))
+    logger.info(f"Count of all collected points: {len(allPoints)}")
+    latitude = sum(p[0] for p in allPoints) / len(allPoints)
     logger.info(f"Calculated latitude: {latitude}")
-    longitude = sum(p[1] for p in all_points) / len(all_points)
+    longitude = sum(p[1] for p in allPoints) / len(allPoints)
     logger.info(f"Calculated longitude: {longitude}")
 
     # Create map
-    folium_map = folium.Map(location=[latitude, longitude], zoom_start=zoom)
+    foliumMap = folium.Map(location=[latitude, longitude], zoom_start=zoom)
 
     # Draw tracks
-    for number, points in points_dict.items():
+    for number, points in pointsDict.items():
         # Calculate Color for track based on HSV circle and count of gpx files
-        color = colorutils.Color(hsv=(360 / len(points_dict) * number, 1, 1)).hex
+        color = colorutils.Color(hsv=(360 / len(pointsDict) * number, 1, 1)).hex
         folium.PolyLine(
             points,
             color=color,
-        ).add_to(folium_map)
+        ).add_to(foliumMap)
 
-    return folium_map
+    return foliumMap
 
 
 ###############################################################################
