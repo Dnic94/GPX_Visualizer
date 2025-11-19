@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load bootstrap5 %}
+
+{% block content %}
+<h2>Upload Route(s)</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <!-- File Input -->
+    <div class="mb-3">
+        <label for="id_files" class="form-label">Select GPX/TCX files</label>
+        <input type="file" name="files" multiple class="form-control" required id="id_files">
+    </div>
+
+    <!-- Container for file-specific forms -->
+    <div id="file-previews" class="mb-3"></div>
+
+    <button type="submit" class="btn btn-primary">Upload</button>
+
+    <!-- Hidden template for activity type dropdown -->
+    <div style="display: none;">
+        {{ form.activity_type }}
+    </div>
+</form>
+
+<script>
+document.getElementById('id_files').addEventListener('change', function(event) {
+    const previewsContainer = document.getElementById('file-previews');
+    previewsContainer.innerHTML = ''; // Clear existing previews
+    const files = event.target.files;
+
+    // Get the activity type options from the hidden Django form field
+    const activityTypeSelect = document.getElementById('id_activity_type');
+    const activityOptions = Array.from(activityTypeSelect.options).map(option => {
+        return `<option value="${option.value}">${option.text}</option>`;
+    }).join('');
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Create a card for each file preview
+        const previewElement = document.createElement('div');
+        previewElement.classList.add('card', 'mb-3');
+        previewElement.innerHTML = `
+            <div class="card-header">
+                <strong>File:</strong> ${file.name}
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="id_name_${i}" class="form-label">Route Name</label>
+                    <input type="text" name="name_${i}" class="form-control" value="${file.name.split('.').slice(0, -1).join('.')}" required id="id_name_${i}">
+                </div>
+                <div class="mb-3">
+                    <label for="id_activity_type_${i}" class="form-label">Activity Type</label>
+                    <select name="activity_type_${i}" class="form-select" required id="id_activity_type_${i}">
+                        ${activityOptions}
+                    </select>
+                </div>
+            </div>
+        `;
+        previewsContainer.appendChild(previewElement);
+    }
+});
+</script>
+{% endblock %}

@@ -17,7 +17,7 @@ __created__ = "10.06.2022"
 import argparse
 import logging.handlers
 import os
-from typing import Any, List
+from typing import List
 
 import colorutils
 import folium
@@ -36,7 +36,8 @@ log_file_handler = logging.handlers.TimedRotatingFileHandler(
 )
 log_file_handler.setFormatter(
     logging.Formatter(
-        "%(asctime)s [%(levelname)s](%(name)s:%(funcName)s:%(lineno)d): %(message)s"
+        "%(asctime)s [%(levelname)s](%(name)s:%(funcName)s:%(lineno)d): "
+        "%(message)s"
     )
 )
 log_file_handler.setLevel(logging.DEBUG)
@@ -141,7 +142,7 @@ def visualizeGPX(gpxFiles: list, zoom) -> folium.Map:
     Takes a list of gpx file paths and zoom factor for the map.
     Returns a folium map with all tracks.
     """
-    pointsDict: dict[int, List] =  {}
+    pointsDict: dict[int, List] = {}
 
     # Collect points of all tracks in all files
     for number, gpxFile in enumerate(gpxFiles):
@@ -153,7 +154,9 @@ def visualizeGPX(gpxFiles: list, zoom) -> folium.Map:
         for track in gpx.tracks:
             for segment in track.segments:
                 for point in segment.points:
-                    pointsDict[number].append(tuple([point.latitude, point.longitude]))
+                    pointsDict[number].append(
+                        tuple([point.latitude, point.longitude])
+                    )
 
         logger.debug(f"Found {len(pointsDict[number])} points in {gpxFile}.")
 
@@ -171,11 +174,10 @@ def visualizeGPX(gpxFiles: list, zoom) -> folium.Map:
     # Draw tracks
     for number, points in pointsDict.items():
         # Calculate Color for track based on HSV circle and count of gpx files
-        color = colorutils.Color(hsv=(360 / len(pointsDict) * number, 1, 1)).hex
-        folium.PolyLine(
-            points,
-            color=color,
-        ).add_to(foliumMap)
+        color = colorutils.Color(
+            hsv=(360 / len(pointsDict) * number, 1, 1)
+        ).hex
+        folium.PolyLine(points, color=color).add_to(foliumMap)
 
     return foliumMap
 

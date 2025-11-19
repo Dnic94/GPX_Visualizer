@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <h2>Routes</h2>
+        <div id="route-list" class="list-group">
+            {% for route in routes %}
+                <a href="#" class="list-group-item list-group-item-action" data-route-id="{{ route.id }}">
+                    {{ route.name }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div id="map" style="height: 80vh;"></div>
+    </div>
+    <div class="col-md-3">
+        <h2>Details</h2>
+        <div id="route-details">
+            <p>Select a route to see details.</p>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<style>
+    .highlight {
+        background-color: #f0f0f0;
+        border-left: 5px solid #007bff;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const map = L.map('map').setView([51.505, -0.09], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const routeLayers = {};
+
+    fetch('{% url "route_api" %}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.length > 0) {
+                const bounds = L.latLngBounds();
+                data.forEach(route => {
+                    const latLngs = route.points;
+                    const polyline = L.polyline(latLngs, { color: 'blue' }).addTo(map);
+                    routeLayers[route.id] = polyline;
+                    bounds.extend(polyline.getBounds());
+
+                    polyline.on('click', () => {
+                        updateDetails(route);
+                        highlightListItem(route.id);
+                    });
+
+                    polyline.on('mouseover', () => {
+                        polyline.setStyle({ color: 'red', weight: 5 });
+                        highlightListItem(route.id);
+                    });
+
+                    polyline.on('mouseout', () => {
+                        polyline.setStyle({ color: 'blue', weight: 3 });
+                        unhighlightListItem(route.id);
+                    });
+                });
+                map.fitBounds(bounds);
+            }
+        });
+
+    const routeListItems = document.querySelectorAll('#route-list a');
+    routeListItems.forEach(item => {
+        item.addEventListener('mouseover', () => {
+            const routeId = item.dataset.routeId;
+            const polyline = routeLayers[routeId];
+            if (polyline) {
+                polyline.setStyle({ color: 'red', weight: 5 });
+            }
+        });
+
+        item.addEventListener('mouseout', () => {
+            const routeId = item.dataset.routeId;
+            const polyline = routeLayers[routeId];
+            if (polyline) {
+                polyline.setStyle({ color: 'blue', weight: 3 });
+            }
+        });
+
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const routeId = item.dataset.routeId;
+            fetch('{% url "route_api" %}')
+                .then(response => response.json())
+                .then(data => {
+                    const route = data.find(r => r.id == routeId);
+                    updateDetails(route);
+                    highlightListItem(routeId);
+                });
+        });
+    });
+
+    function updateDetails(route) {
+        const detailsPanel = document.getElementById('route-details');
+        detailsPanel.innerHTML = `
+            <h4>${route.name}</h4>
+            <p><strong>User:</strong> ${route.user__username}</p>
+            <p><strong>Activity:</strong> ${route.activity_type__name}</p>
+            <p><strong>Length:</strong> ${route.length.toFixed(2)} km</p>
+        `;
+    }
+
+    function highlightListItem(routeId) {
+        routeListItems.forEach(item => {
+            if (item.dataset.routeId == routeId) {
+                item.classList.add('highlight');
+            } else {
+                item.classList.remove('highlight');
+            }
+        });
+    }
+
+    function unhighlightListItem(routeId) {
+        const item = document.querySelector(`#route-list a[data-route-id='${routeId}']`);
+        if (item) {
+            item.classList.remove('highlight');
+        }
+    }
+});
+</script>
+{% endblock %}
