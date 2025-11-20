@@ -37,35 +37,49 @@ document.addEventListener('DOMContentLoaded', function () {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
+    let allRoutes = [];
     const routeLayers = {};
+    const routeColors = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'];
 
     fetch('{% url "route_api" %}')
         .then(response => response.json())
         .then(data => {
+            allRoutes = data;
             if (data.length > 0) {
                 const bounds = L.latLngBounds();
-                data.forEach(route => {
+                data.forEach((route, i) => {
+                    const color = routeColors[i % routeColors.length];
                     const latLngs = route.points;
-                    const polyline = L.polyline(latLngs, { color: 'blue' }).addTo(map);
-                    routeLayers[route.id] = polyline;
+                    const polyline = L.polyline(latLngs, { color: color, weight: 3 }).addTo(map);
+                    
+                    polyline.bindTooltip(`${route.name} (${route.length.toFixed(2)} km)`, { sticky: true });
+
+                    routeLayers[route.id] = {
+                        layer: polyline,
+                        originalColor: color
+                    };
                     bounds.extend(polyline.getBounds());
 
                     polyline.on('click', () => {
                         updateDetails(route);
                         highlightListItem(route.id);
+                        map.fitBounds(polyline.getBounds(), {padding: [50, 50]});
                     });
 
                     polyline.on('mouseover', () => {
                         polyline.setStyle({ color: 'red', weight: 5 });
+                        polyline.bringToFront();
                         highlightListItem(route.id);
                     });
 
                     polyline.on('mouseout', () => {
-                        polyline.setStyle({ color: 'blue', weight: 3 });
+                        polyline.setStyle({ color: color, weight: 3 });
                         unhighlightListItem(route.id);
                     });
                 });
-                map.fitBounds(bounds);
+                if (bounds.isValid()){
+                    map.fitBounds(bounds);
+                }
             }
         });
 
@@ -73,30 +87,33 @@ document.addEventListener('DOMContentLoaded', function () {
     routeListItems.forEach(item => {
         item.addEventListener('mouseover', () => {
             const routeId = item.dataset.routeId;
-            const polyline = routeLayers[routeId];
-            if (polyline) {
-                polyline.setStyle({ color: 'red', weight: 5 });
+            const routeLayer = routeLayers[routeId];
+            if (routeLayer) {
+                routeLayer.layer.setStyle({ color: 'red', weight: 5 });
+                routeLayer.layer.bringToFront();
             }
         });
 
         item.addEventListener('mouseout', () => {
             const routeId = item.dataset.routeId;
-            const polyline = routeLayers[routeId];
-            if (polyline) {
-                polyline.setStyle({ color: 'blue', weight: 3 });
+            const routeLayer = routeLayers[routeId];
+            if (routeLayer) {
+                routeLayer.layer.setStyle({ color: routeLayer.originalColor, weight: 3 });
             }
         });
 
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const routeId = item.dataset.routeId;
-            fetch('{% url "route_api" %}')
-                .then(response => response.json())
-                .then(data => {
-                    const route = data.find(r => r.id == routeId);
-                    updateDetails(route);
-                    highlightListItem(routeId);
-                });
+            const route = allRoutes.find(r => r.id == routeId);
+            if (route) {
+                updateDetails(route);
+                highlightListItem(routeId);
+                const routeLayer = routeLayers[routeId];
+                if (routeLayer) {
+                    map.fitBounds(routeLayer.layer.getBounds(), {padding: [50, 50]});
+                }
+            }
         });
     });
 
@@ -107,6 +124,13 @@ document.addEventListener('DOMContentLoaded', function () {
             <p><strong>User:</strong> ${route.user__username}</p>
             <p><strong>Activity:</strong> ${route.activity_type__name}</p>
             <p><strong>Length:</strong> ${route.length.toFixed(2)} km</p>
+            <div class="mt-3">
+                <a href="/route/${route.id}/edit/" class="btn btn-primary btn-sm me-2">Edit</a>
+                <form action="/route/${route.id}/delete/" method="post" onsubmit="return confirm('Are you sure you want to delete this route?');" style="display: inline;">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                </form>
+            </div>
         `;
     }
 

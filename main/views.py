@@ -1,26 +1,13 @@
-from django.http import JsonResponse
-from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.http import JsonResponse, Http404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
-from .forms import RegisterForm, RouteForm
+from .forms import RegisterForm, RouteEditForm
 from .models import Route
 import gpxpy
 import gpxpy.gpx
-from tcxparser import TCXParser
-from math import radians, sin, cos, sqrt, atan2
-
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371  # Radius of Earth in kilometers
-    dLat = radians(lat2 - lat1)
-    dLon = radians(lon2 - lon1)
-    a = (sin(dLat / 2) * sin(dLat / 2) +
-         cos(radians(lat1)) * cos(radians(lat2)) *
-         sin(dLon / 2) * sin(dLon / 2))
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    distance = R * c
-    return distance
 
 
 def register(request):
@@ -58,52 +45,99 @@ from .models import ActivityType
 @login_required
 def upload_route(request):
     if request.method == 'POST':
-        form = RouteForm(request.POST, request.FILES)
-        if form.is_valid():
-            uploaded_files = request.FILES.getlist('files')
-            for i, uploaded_file in enumerate(uploaded_files):
-                points = []
-                total_length = 0
-                if uploaded_file.name.endswith('.gpx'):
-                    gpx = gpxpy.parse(uploaded_file)
+        uploaded_files = request.FILES.getlist('files')
+        success_count = 0
+        skipped_count = 0
+
+        for i, uploaded_file in enumerate(uploaded_files):
+            points = []
+            total_length = 0
+
+            try:
+                if uploaded_file.name.endswith('.gpx') or uploaded_file.name.endswith('.tcx'):
+                    uploaded_file.seek(0)
+                    gpx = gpxpy.parse(uploaded_file.read())
                     for track in gpx.tracks:
                         for segment in track.segments:
                             for point in segment.points:
-                                points.append(
-                                    [point.latitude, point.longitude]
-                                )
-                    # Convert to km
+                                points.append([point.latitude, point.longitude])
                     total_length = gpx.length_3d() / 1000
-                elif uploaded_file.name.endswith('.tcx'):
-                    # For TCX, we need to decode the file content
-                    tcx_content = uploaded_file.read().decode('utf-8')
-                    tcx = TCXParser(tcx_content)
-                    if tcx.position_values:
-                        for j in range(len(tcx.position_values) - 1):
-                            lat1, lon1 = tcx.position_values[j]
-                            lat2, lon2 = tcx.position_values[j+1]
-                            points.append([lat1, lon1])
-                            total_length += haversine(lat1, lon1, lat2, lon2)
-                        # Add the last point
-                        last_point = tcx.position_values[-1]
-                        points.append([last_point[0], last_point[1]])
 
+                else:
+                    messages.add_message(request, messages.WARNING, f"Skipping file '{uploaded_file.name}': Unknown file type.")
+                    skipped_count += 1
+                    continue
+
+                if not points:
+                    messages.add_message(request, messages.WARNING, f"Skipping file '{uploaded_file.name}': No track points found after parsing.")
+                    skipped_count += 1
+                    continue
+                
                 route_name = request.POST.get(f'name_{i}')
                 activity_type_id = request.POST.get(f'activity_type_{i}')
-                activity_type = ActivityType.objects.get(pk=activity_type_id)
 
-                if points and route_name and activity_type:
-                    Route.objects.create(
-                        user=request.user,
-                        name=route_name,
-                        activity_type=activity_type,
-                        points=points,
-                        length=total_length
-                    )
+                if not route_name or not activity_type_id:
+                    messages.add_message(request, messages.WARNING, f"Skipping file '{uploaded_file.name}': Form data (name or activity) was missing.")
+                    skipped_count += 1
+                    continue
+
+                try:
+                    activity_type = ActivityType.objects.get(pk=activity_type_id)
+                except ActivityType.DoesNotExist:
+                    messages.add_message(request, messages.WARNING, f"Skipping file '{uploaded_file.name}': Invalid activity type selected.")
+                    skipped_count += 1
+                    continue
+
+                Route.objects.create(
+                    user=request.user,
+                    name=route_name,
+                    activity_type=activity_type,
+                    points=points,
+                    length=total_length
+                )
+                success_count += 1
+
+            except Exception as e:
+                messages.add_message(request, messages.ERROR, f"An error occurred while processing '{uploaded_file.name}': {e}")
+                skipped_count += 1
+        
+        if success_count > 0:
+            messages.add_message(request, messages.SUCCESS, f"Successfully uploaded {success_count} route(s).")
+        if skipped_count > 0:
+            messages.add_message(request, messages.WARNING, f"Skipped {skipped_count} file(s). See other messages for details.")
+
+        return redirect('home')
+    else:
+        activity_types = ActivityType.objects.all()
+        return render(request, 'upload_route.html', {'activity_types': activity_types})
+
+
+@login_required
+def delete_route(request, route_id):
+    route = get_object_or_404(Route, pk=route_id)
+    if route.user != request.user:
+        raise Http404
+    route.delete()
+    messages.add_message(request, messages.SUCCESS, f"Route '{route.name}' has been deleted.")
+    return redirect('home')
+
+
+@login_required
+def edit_route(request, route_id):
+    route = get_object_or_404(Route, pk=route_id)
+    if route.user != request.user:
+        raise Http404
+
+    if request.method == 'POST':
+        form = RouteEditForm(request.POST, instance=route)
+        if form.is_valid():
+            form.save()
+            messages.add_message(request, messages.SUCCESS, f"Route '{route.name}' has been updated.")
             return redirect('home')
     else:
-        form = RouteForm()
-    return render(request, 'upload_route.html', {'form': form})
+        form = RouteEditForm(instance=route)
+
+    return render(request, 'edit_route.html', {'form': form, 'route': route})
 
 
 def home(request):

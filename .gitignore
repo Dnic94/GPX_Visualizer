@@ -2,3 +2,8 @@ db.sqlite3
 __pycache__/
 *.pyc
 django_output.log
+/dummy_files/
+/uploads/
+gpxMap.html
+logs/
+.venv/

@@ -2,26 +2,35 @@
 {% load bootstrap5 %}
 
 {% block content %}
-<h2>Upload Route(s)</h2>
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
+<div class="container mt-4">
+    <h1 class="mb-3">Upload Your Routes</h1>
+    <p class="lead mb-4">Select GPX or TCX files to upload. For each file, you can specify a name and activity type.</p>
 
-    <!-- File Input -->
-    <div class="mb-3">
-        <label for="id_files" class="form-label">Select GPX/TCX files</label>
-        <input type="file" name="files" multiple class="form-control" required id="id_files">
+    <div class="card">
+        <div class="card-header">
+            Upload Files
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <!-- File Input -->
+                <div class="mb-3">
+                    <label for="id_files" class="form-label">Select GPX/TCX files</label>
+                    <input type="file" name="files" multiple class="form-control" required id="id_files">
+                </div>
+
+                <!-- Container for file-specific forms -->
+                <div id="file-previews" class="mb-3"></div>
+
+                <button type="submit" class="btn btn-primary">Upload</button>
+
+                <!-- Hidden template for activity type dropdown -->
+                
+            </form>
+        </div>
     </div>
-
-    <!-- Container for file-specific forms -->
-    <div id="file-previews" class="mb-3"></div>
-
-    <button type="submit" class="btn btn-primary">Upload</button>
-
-    <!-- Hidden template for activity type dropdown -->
-    <div style="display: none;">
-        {{ form.activity_type }}
-    </div>
-</form>
+</div>
 
 <script>
 document.getElementById('id_files').addEventListener('change', function(event) {
@@ -29,11 +38,13 @@ document.getElementById('id_files').addEventListener('change', function(event) {
     previewsContainer.innerHTML = ''; // Clear existing previews
     const files = event.target.files;
 
-    // Get the activity type options from the hidden Django form field
-    const activityTypeSelect = document.getElementById('id_activity_type');
-    const activityOptions = Array.from(activityTypeSelect.options).map(option => {
-        return `<option value="${option.value}">${option.text}</option>`;
-    }).join('');
+    // Get the activity type options from the context
+    const activityOptions = `
+        <option value="" selected>---------</option>
+        {% for type in activity_types %}
+            <option value="{{ type.pk }}">{{ type.name }}</option>
+        {% endfor %}
+    `;
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
