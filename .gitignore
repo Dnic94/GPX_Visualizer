@@ -7,3 +7,4 @@ django_output.log
 gpxMap.html
 logs/
 .venv/
+.idea/
